@@ -1,0 +1,75 @@
+services:
+  spark-master:
+    image: spark:3.5.8-python3
+    profiles: ["analytics"]
+    command:
+      - /opt/spark/bin/spark-class
+      - org.apache.spark.deploy.master.Master
+      - --host
+      - spark-master
+      - --port
+      - "7077"
+      - --webui-port
+      - "8080"
+    ports:
+      - "7077:7077"
+      - "8080:8080"
+    env_file:
+      - ../.env
+    volumes:
+      # Прокидаємо код напряму в контейнер. 
+      # Це дозволить тобі не перезбирати образ при кожній зміні Python-скрипта.
+      - ../spark_jobs:/app
+
+  spark-worker:
+    image: spark:3.5.8-python3
+    profiles: ["analytics"]
+    command:
+      - /opt/spark/bin/spark-class
+      - org.apache.spark.deploy.worker.Worker
+      - spark://spark-master:7077
+      - --webui-port
+      - "8081"
+      - --cores
+      - "2"
+      - --memory
+      - 2G
+    ports:
+      - "8081:8081"
+    env_file:
+      - ../.env
+    depends_on:
+      - spark-master
+    volumes:
+      - ../spark_jobs:/app
+
+  raw-archive-job:
+    image: spark:3.5.8-python3
+    profiles: ["analytics"]
+    depends_on:
+      - spark-master
+      - spark-worker
+      - kafka
+    volumes:
+      - ../spark_jobs:/app
+    env_file:
+      - ../.env
+    command: >
+      /opt/spark/bin/spark-submit 
+      --master spark://spark-master:7077 
+      --conf spark.jars.ivy=/tmp/.ivy2
+      --packages org.apache.spark:spark-sql-kafka-0-10_2.12:3.5.0,org.apache.hadoop:hadoop-aws:3.3.4,com.amazonaws:aws-java-sdk-bundle:1.12.262
+      /app/streaming/save_raw_job.py
+
+  # # Наш "будильник" для запуску батч-обробки раз на годину
+  # batch-scheduler:
+  #   build:
+  #     context: ../spark_jobs
+  #     dockerfile: Dockerfile
+  #   profiles: ["analytics"]
+  #   env_file:
+  #     - ../.env
+  #   depends_on:
+  #     - spark-master
+  #     - spark-worker
+  #   restart: always

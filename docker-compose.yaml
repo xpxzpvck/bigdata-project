@@ -1,0 +1,7 @@
+name: wikipedia-analytics
+
+include:
+  - path: devops/docker-compose.kafka.yaml
+  - path: devops/docker-compose.storage.yaml
+  - path: devops/docker-compose.apps.yaml
+  - path: devops/docker-compose.spark.yaml
