@@ -1,0 +1,10 @@
+[project]
+name = "wikipedia-analytics-api"
+version = "0.1.0"
+description = "REST API"
+requires-python = ">=3.11"
+dependencies = [
+    "fastapi",
+    "uvicorn",
+    "cassandra-driver"
+]

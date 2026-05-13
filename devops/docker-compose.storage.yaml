@@ -24,7 +24,7 @@ services:
     volumes:
       - ../database/ddl.cql:/ddl.cql
     command: >
-      bash -c "cqlsh cassandra -f /ddl.cql"
+      bash -c "cqlsh cassandra 9042 -f /ddl.cql"
 
   minio:
     image: minio/minio:latest
@@ -53,18 +53,8 @@ services:
       echo 'Done!';
       "
 
-  redis:
-    image: redis:alpine
-    ports:
-      - "6379:6379"
-    volumes:
-      - redis_data:/data
-    restart: unless-stopped
-
 volumes:
   cassandra_data:
     driver: local
   minio_data:
-    driver: local
-  redis_data:
     driver: local

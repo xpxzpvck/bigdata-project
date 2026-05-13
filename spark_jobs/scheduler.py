@@ -7,19 +7,19 @@ def run_batch_jobs():
     print(f"[{datetime.now()}] Starting batch jobs...")
     try:
         subprocess.run([
-            "spark-submit", 
+            "/opt/spark/bin/spark-submit", 
             "--master", "spark://spark-master:7077", 
             "--conf", "spark.jars.ivy=/tmp/.ivy2",
             "--packages", "org.apache.hadoop:hadoop-aws:3.3.4,com.amazonaws:aws-java-sdk-bundle:1.12.262,com.datastax.spark:spark-cassandra-connector_2.12:3.4.1",
-            "batch/hourly_report_job.py"
+            "/app/batch/hourly_report_job.py"  # Виправлено: додано /app/
         ], check=True)
         
         subprocess.run([
-            "spark-submit", 
+            "/opt/spark/bin/spark-submit", 
             "--master", "spark://spark-master:7077", 
             "--conf", "spark.jars.ivy=/tmp/.ivy2",
             "--packages", "org.apache.hadoop:hadoop-aws:3.3.4,com.amazonaws:aws-java-sdk-bundle:1.12.262,com.datastax.spark:spark-cassandra-connector_2.12:3.4.1",
-            "batch/editor_patterns_job.py"
+            "/app/batch/editor_patterns_job.py"  # Виправлено: додано /app/
         ], check=True)
         
         print(f"[{datetime.now()}] All batch jobs completed successfully!")

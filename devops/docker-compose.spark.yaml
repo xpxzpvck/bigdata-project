@@ -47,6 +47,8 @@ services:
         condition: service_started
       cassandra:
         condition: service_healthy
+      cassandra-setup:
+        condition: service_completed_successfully
       kafka-setup:
         condition: service_completed_successfully
     volumes:
@@ -55,6 +57,7 @@ services:
 
   batch-scheduler:
     image: spark:3.5.8-python3
+    user: root
     profiles: ["analytics"]
     depends_on:
       spark-master:
@@ -65,7 +68,9 @@ services:
         condition: service_healthy
       cassandra:
         condition: service_healthy
+      cassandra-setup:
+        condition: service_completed_successfully
     volumes:
       - ../spark_jobs:/app
-    command: bash -c "pip install schedule && python /app/scheduler.py"
+    command: bash -c "pip install schedule && python3 /app/scheduler.py"
     restart: always

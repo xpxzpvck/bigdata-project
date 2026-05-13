@@ -1,44 +1,35 @@
 import os
 from pyspark.sql import SparkSession
 from pyspark.sql.functions import (
-    col, from_json, explode, split, lower, window,
-    count, collect_set, struct, to_json, current_timestamp, lit, slice, length
+    col, from_json, window, count, when, expr,
+    collect_list, struct, to_json, lit, date_format, round
 )
 from pyspark.sql.types import StructType, StructField, StringType
 
+# 1. Читаємо конфігурацію MinIO та Kafka
 MINIO_ACCESS_KEY = "minioadmin"
 MINIO_SECRET_KEY = "minioadmin"
-
-spark = SparkSession.builder \
-    .appName("BreakingNewsJob") \
-    .config("spark.hadoop.fs.s3a.endpoint", "http://minio:9000") \
-    .config("spark.hadoop.fs.s3a.access.key", MINIO_ACCESS_KEY) \
-    .config("spark.hadoop.fs.s3a.secret.key", MINIO_SECRET_KEY) \
-    .config("spark.hadoop.fs.s3a.path.style.access", "true") \
-    .config("spark.hadoop.fs.s3a.impl", "org.apache.hadoop.fs.s3a.S3AFileSystem") \
-    .config("spark.hadoop.fs.s3a.connection.ssl.enabled", "false") \
-    .getOrCreate()
-
-spark.sparkContext.setLogLevel("WARN")
-
 KAFKA_BROKER = "kafka:9092"
+
 INPUT_TOPIC = "raw-page-creates"
 OUTPUT_TOPIC = "breaking-news-alerts"
 CHECKPOINT_PATH = "s3a://wikipedia-batch-data/checkpoints/breaking_news"
 
-STOP_WORDS = ["i", "me", "my", "myself", "we", "our", "ours", "ourselves", "you", "your", "yours", "yourself", 
-              "yourselves", "he", "him", "his", "himself", "she", "her", "hers", "herself", "it", "its", "itself", 
-              "they", "them", "their", "theirs", "themselves", "what", "which", "who", "whom", "this", "that", 
-              "these", "those", "am", "is", "are", "was", "were", "be", "been", "being", "have", "has", "had", 
-              "having", "do", "does", "did", "doing", "a", "an", "the", "and", "but", "if", "or", "because", "as", 
-              "until", "while", "of", "at", "by", "for", "with", "about", "against", "between", "into", "through", 
-              "during", "before", "after", "above", "below", "to", "from", "up", "down", "in", "out", "on", "off", 
-              "over", "under", "again", "further", "then", "once", "here", "there", "when", "where", "why", "how",
-              "all", "any", "both", "each", "few", "more", "most", "other", "some", "such", "no", "nor", "not", "only",
-              "own", "same", "so", "than", "too", "very", "s", "t", "can", "will", "just", "don", "should", "now"]
-
 def main():
-    # 1. Читаємо сирий потік з Kafka
+    # 2. Налаштовуємо Spark з підключенням до S3 (MinIO)
+    spark = SparkSession.builder \
+        .appName("BreakingNewsJob") \
+        .config("spark.hadoop.fs.s3a.endpoint", "http://minio:9000") \
+        .config("spark.hadoop.fs.s3a.access.key", MINIO_ACCESS_KEY) \
+        .config("spark.hadoop.fs.s3a.secret.key", MINIO_SECRET_KEY) \
+        .config("spark.hadoop.fs.s3a.path.style.access", "true") \
+        .config("spark.hadoop.fs.s3a.impl", "org.apache.hadoop.fs.s3a.S3AFileSystem") \
+        .config("spark.hadoop.fs.s3a.connection.ssl.enabled", "false") \
+        .getOrCreate()
+
+    spark.sparkContext.setLogLevel("WARN")
+
+    # 3. Читаємо потік
     raw_stream = spark.readStream \
         .format("kafka") \
         .option("kafka.bootstrap.servers", KAFKA_BROKER) \
@@ -47,7 +38,6 @@ def main():
         .option("failOnDataLoss", "false") \
         .load()
 
-    # 2. Описуємо схему JSON, який ми очікуємо від EventStreams
     schema = StructType([
         StructField("page_title", StringType(), True),
         StructField("meta", StructType([
@@ -55,8 +45,7 @@ def main():
         ]), True)
     ])
 
-    # 3. Парсимо JSON та дістаємо потрібні поля. 
-    # Замість rev_timestamp використовуємо час потрапляння в Kafka для windowing
+    # 4. Парсимо та чистимо від службових сторінок (File:, Category:, User:)
     parsed_stream = raw_stream \
         .select(
             from_json(col("value").cast("string"), schema).alias("data"),
@@ -67,46 +56,49 @@ def main():
             col("data.meta.domain").alias("domain"),
             col("event_time")
         ) \
-        .filter(col("page_title").isNotNull())
+        .filter(col("page_title").isNotNull()) \
+        .filter(col("domain").isNotNull())
 
-    # 4. Keyword Tokenization (розбиваємо назву на слова)
-    # Використовуємо regex для поділу по пробілах, нижніх підкресленнях та пунктуації
-    words_stream = parsed_stream \
-        .withColumn("word", explode(split(lower(col("page_title")), r"[\s_\p{Punct}]+"))) \
-        .filter(col("word") != "") \
-        .filter(length(col("word")) > 2) \
-        .filter(~col("word").isin(STOP_WORDS))
-
-    # 5. Sliding Window Aggregation (вікно 10 хв, зсув 1 хв)
-    agg_stream = words_stream \
-        .withWatermark("event_time", "2 minutes") \
+    # 5. Sliding Window 1 година (зсув 5 хвилин)
+    # ФІКС: Обходимо заборону Spark. Збираємо всі події в масив і рахуємо їх відразу після agg()
+    agg_stream = parsed_stream \
+        .withWatermark("event_time", "5 minutes") \
         .groupBy(
-            window(col("event_time"), "10 minutes", "1 minute"),
-            col("word")
+            window(col("event_time"), "1 hour", "5 minutes").alias("time_window"),
+            col("domain")
         ) \
         .agg(
-            count("page_title").alias("occurrences"),
-            collect_set("domain").alias("domains"),
-            # Збираємо унікальні назви сторінок, але беремо лише перші 5 для sample_pages
-            slice(collect_set("page_title"), 1, 5).alias("sample_pages")
+            count("page_title").alias("pages_last_1hour"),
+            collect_list(struct(col("event_time"), col("page_title"))).alias("all_events")
         ) \
-        .filter(col("occurrences") >= 5)
+        .withColumn("recent_events", expr("filter(all_events, e -> e.event_time >= time_window.end - interval 5 minutes)")) \
+        .withColumn("pages_last_5min", expr("size(recent_events)")) \
+        .withColumn("sample_pages", expr("slice(transform(recent_events, e -> e.page_title), 1, 5)")) \
+        .drop("all_events", "recent_events")
 
-    # 6. Форматуємо результат у JSON для відправки в Kafka
+    # 6. Математика: Рахуємо baseline та spike_ratio
     alert_stream = agg_stream \
+        .withColumn("avg_pages_per_5min", round((col("pages_last_1hour") - col("pages_last_5min")) / 11, 2)) \
+        .withColumn("avg_pages_per_5min", when(col("avg_pages_per_5min") <= 0, 1).otherwise(col("avg_pages_per_5min"))) \
+        .withColumn("spike_ratio", round(col("pages_last_5min") / col("avg_pages_per_5min"), 2)) \
+        .filter(col("spike_ratio") > 3.0)
+
+    # 7. Форматування JSON
+    output_stream = alert_stream \
         .select(
             to_json(struct(
-                current_timestamp().cast("string").alias("alert_time"),
-                lit("keyword_burst").alias("alert_type"),
-                col("word").alias("keyword"),
-                col("occurrences"),
-                col("domains"),
+                date_format(col("time_window.end"), "yyyy-MM-dd HH:mm:ss").alias("alert_time"),
+                lit("activity_spike").alias("alert_type"),
+                col("domain"),
+                col("pages_last_5min").cast("integer").alias("pages_last_5min"),
+                col("avg_pages_per_5min").cast("double").alias("avg_pages_per_5min"),
+                col("spike_ratio").cast("double").alias("spike_ratio"),
                 col("sample_pages")
             )).alias("value")
         )
 
-    # 7. Записуємо в цільовий топік
-    query = alert_stream.writeStream \
+    # 8. Запис у Kafka
+    query = output_stream.writeStream \
         .format("kafka") \
         .option("kafka.bootstrap.servers", KAFKA_BROKER) \
         .option("topic", OUTPUT_TOPIC) \
