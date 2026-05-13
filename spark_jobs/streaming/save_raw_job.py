@@ -40,7 +40,8 @@ def main():
         .withColumn("month", month("timestamp")) \
         .withColumn("day", dayofmonth("timestamp"))
 
-    query = parsed_stream.writeStream \
+    query = parsed_stream.coalesce(1) \
+        .writeStream \
         .format("parquet") \
         .option("path", MINIO_BUCKET_PATH) \
         .option("checkpointLocation", CHECKPOINT_PATH) \

@@ -22,7 +22,7 @@ services:
       cassandra:
         condition: service_healthy
     volumes:
-      - ./ddl.cql:/ddl.cql
+      - ../database/ddl.cql:/ddl.cql
     command: >
       bash -c "cqlsh cassandra -f /ddl.cql"
 

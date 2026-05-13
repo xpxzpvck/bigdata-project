@@ -27,9 +27,9 @@ services:
       - --webui-port
       - "8081"
       - --cores
-      - "2"
+      - "8"
       - --memory
-      - 2G
+      - 7G
     ports:
       - "8081:8081"
     depends_on:
@@ -53,19 +53,19 @@ services:
       - ../spark_jobs:/app
     command: bash /app/run_streams.sh
 
-batch-scheduler:
-  image: spark:3.5.8-python3
-  profiles: ["analytics"]
-  depends_on:
-    spark-master:
-      condition: service_started
-    spark-worker:
-      condition: service_started
-    minio:
-      condition: service_healthy
-    cassandra:
-      condition: service_healthy
-  volumes:
-    - ../spark_jobs:/app
-  command: bash -c "pip install schedule && python /app/scheduler.py"
-  restart: always
+  batch-scheduler:
+    image: spark:3.5.8-python3
+    profiles: ["analytics"]
+    depends_on:
+      spark-master:
+        condition: service_started
+      spark-worker:
+        condition: service_started
+      minio:
+        condition: service_healthy
+      cassandra:
+        condition: service_healthy
+    volumes:
+      - ../spark_jobs:/app
+    command: bash -c "pip install schedule && python /app/scheduler.py"
+    restart: always
