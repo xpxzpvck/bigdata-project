@@ -54,9 +54,7 @@ services:
     command: bash /app/run_streams.sh
 
 batch-scheduler:
-  build:
-    context: ../spark_jobs
-    dockerfile: Dockerfile
+  image: spark:3.5.8-python3
   profiles: ["analytics"]
   depends_on:
     spark-master:
@@ -67,4 +65,7 @@ batch-scheduler:
       condition: service_healthy
     cassandra:
       condition: service_healthy
+  volumes:
+    - ../spark_jobs:/app
+  command: bash -c "pip install schedule && python /app/scheduler.py"
   restart: always

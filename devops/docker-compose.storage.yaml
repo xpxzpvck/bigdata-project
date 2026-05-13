@@ -15,6 +15,16 @@ services:
       timeout: 5s
       retries: 10
     restart: unless-stopped
+  
+  cassandra-setup:
+    image: cassandra:latest
+    depends_on:
+      cassandra:
+        condition: service_healthy
+    volumes:
+      - ./ddl.cql:/ddl.cql
+    command: >
+      bash -c "cqlsh cassandra -f /ddl.cql"
 
   minio:
     image: minio/minio:latest
@@ -38,7 +48,7 @@ services:
         condition: service_healthy
     entrypoint: >
       /bin/sh -c "
-      until mc alias set local http://minio:9000 $$MINIO_ACCESS_KEY $$MINIO_SECRET_KEY; do sleep 2; done &&
+      until mc alias set local http://minio:9000 minioadmin minioadmin; do sleep 2; done &&
       mc mb local/wikipedia-batch-data --ignore-existing;
       echo 'Done!';
       "

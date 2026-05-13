@@ -11,8 +11,8 @@ logger = logging.getLogger(__name__)
 STREAM_URL = 'https://stream.wikimedia.org/v2/stream/page-create'
 USER_AGENT = "WikipediaAnalyticsPipeline/1.0 (tepliakov.pn@ucu.edu.ua)"
 
-KAFKA_BROKER = os.getenv('KAFKA_BROKER', 'kafka:9092')
-KAFKA_TOPIC = os.getenv('KAFKA_TOPIC', 'raw-page-creates')
+KAFKA_BROKER = 'kafka:9092'
+KAFKA_TOPIC = 'raw-page-creates'
 
 def create_kafka_producer():
     try:
