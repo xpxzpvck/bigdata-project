@@ -70,7 +70,7 @@ def process_domain_stats(df, _):
         
     # --- ЗАПИС АЛЕРТІВ (>80%) У KAFKA ---
     # Захист: генеруємо алерт тільки якщо створено хоча б 5 сторінок (відсікаємо мікродомени)
-    alerts_df = final_df.filter((col("bot_percentage") > 80.0) & (col("total_count") >= 5))
+    alerts_df = final_df.filter(col("bot_percentage") > 80.0)
     
     if not alerts_df.isEmpty():
         alerts_df.select(

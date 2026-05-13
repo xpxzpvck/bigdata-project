@@ -56,7 +56,12 @@ def start_ingestion():
                         if change.get('meta', {}).get('domain') == 'canary':
                             continue
                         
-                        producer.send(KAFKA_TOPIC, value=change)
+                        domain = change.get('meta', {}).get('domain', 'unknown')
+                        producer.send(
+                            KAFKA_TOPIC, 
+                            key=domain.encode('utf-8'), 
+                            value=change
+                        )
                         
                         last_id = event.last_event_id
                         
