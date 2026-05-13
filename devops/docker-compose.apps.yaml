@@ -1,23 +1,25 @@
 services:
   ingestion:
     build: 
-      context: ../ingestion  # Вказуємо шлях до папки з кодом Ingestion
+      context: ../ingestion
       dockerfile: Dockerfile
-    env_file:
-      - ../.env              # Підтягуємо спільні конфіги з кореня
+    environment:
+      - KAFKA_BROKER=kafka:9092
+      - KAFKA_TOPIC=raw-page-creates
     depends_on:
-      - kafka                # Чекаємо на запуск брокера
-    restart: always          # Автоматично перезапускати, якщо впаде
+      kafka-setup:
+        condition: service_completed_successfully
+    restart: always
 
-  # api:
-  #   build: 
-  #     context: ../api        # Вказуємо шлях до папки з кодом API
-  #     dockerfile: Dockerfile
-  #   env_file:
-  #     - ../.env              # Підтягуємо ті самі конфіги (для Cassandra/Redis)
-  #   ports:
-  #     - "8000:8000"          # Відкриваємо порт для доступу зовні
-  #   depends_on:
-  #     - cassandra            # Чекаємо на базу даних
-  #     - redis                # Чекаємо на кеш
-  #   restart: always
+  api:
+    build: 
+      context: ../api
+      dockerfile: Dockerfile
+    ports:
+      - "8000:8000"
+    depends_on:
+      redis:
+        condition: service_started
+      cassandra:
+        condition: service_healthy
+    restart: always

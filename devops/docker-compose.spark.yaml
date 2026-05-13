@@ -14,11 +14,7 @@ services:
     ports:
       - "7077:7077"
       - "8080:8080"
-    env_file:
-      - ../.env
     volumes:
-      # Прокидаємо код напряму в контейнер. 
-      # Це дозволить тобі не перезбирати образ при кожній зміні Python-скрипта.
       - ../spark_jobs:/app
 
   spark-worker:
@@ -36,40 +32,39 @@ services:
       - 2G
     ports:
       - "8081:8081"
-    env_file:
-      - ../.env
     depends_on:
       - spark-master
     volumes:
       - ../spark_jobs:/app
 
-  raw-archive-job:
+  streaming-jobs:
     image: spark:3.5.8-python3
     profiles: ["analytics"]
     depends_on:
-      - spark-master
-      - spark-worker
-      - kafka
+      spark-master:
+        condition: service_started
+      spark-worker:
+        condition: service_started
+      cassandra:
+        condition: service_healthy
+      kafka-setup:
+        condition: service_completed_successfully
     volumes:
       - ../spark_jobs:/app
-    env_file:
-      - ../.env
-    command: >
-      /opt/spark/bin/spark-submit 
-      --master spark://spark-master:7077 
-      --conf spark.jars.ivy=/tmp/.ivy2
-      --packages org.apache.spark:spark-sql-kafka-0-10_2.12:3.5.0,org.apache.hadoop:hadoop-aws:3.3.4,com.amazonaws:aws-java-sdk-bundle:1.12.262
-      /app/streaming/save_raw_job.py
+    command: bash /app/run_streams.sh
 
-  # # Наш "будильник" для запуску батч-обробки раз на годину
-  # batch-scheduler:
-  #   build:
-  #     context: ../spark_jobs
-  #     dockerfile: Dockerfile
-  #   profiles: ["analytics"]
-  #   env_file:
-  #     - ../.env
-  #   depends_on:
-  #     - spark-master
-  #     - spark-worker
-  #   restart: always
+batch-scheduler:
+  build:
+    context: ../spark_jobs
+    dockerfile: Dockerfile
+  profiles: ["analytics"]
+  depends_on:
+    spark-master:
+      condition: service_started
+    spark-worker:
+      condition: service_started
+    minio:
+      condition: service_healthy
+    cassandra:
+      condition: service_healthy
+  restart: always

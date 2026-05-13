@@ -21,8 +21,6 @@ services:
     ports:
       - "9000:9000"
       - "9001:9001"
-    env_file:
-      - ../.env
     command: server /data --console-address ":9001"
     volumes:
       - minio_data:/data
@@ -38,12 +36,10 @@ services:
     depends_on:
       minio:
         condition: service_healthy
-    env_file:
-      - ../.env
     entrypoint: >
       /bin/sh -c "
       until mc alias set local http://minio:9000 $$MINIO_ACCESS_KEY $$MINIO_SECRET_KEY; do sleep 2; done &&
-      mc mb myminio/wikipedia-batch-data --ignore-existing;
+      mc mb local/wikipedia-batch-data --ignore-existing;
       echo 'Done!';
       "
 

@@ -21,8 +21,6 @@ services:
       interval: 5s
       timeout: 5s
       retries: 5
-    env_file:
-      - ../.env
     volumes:
       - kafka_data:/kafka
 
@@ -35,19 +33,24 @@ services:
       bash -c "
         /opt/kafka/bin/kafka-topics.sh --bootstrap-server kafka:9092 --create --if-not-exists --topic raw-page-creates --partitions 3
         echo 'Topic raw-page-creates created successfully.'
+        /opt/kafka/bin/kafka-topics.sh --bootstrap-server kafka:9092 --create --if-not-exists --topic breaking-news-alerts --partitions 3
+        echo 'Topic breaking-news-alerts created successfully.'
+        /opt/kafka/bin/kafka-topics.sh --bootstrap-server kafka:9092 --create --if-not-exists --topic bot-alerts --partitions 3
+        echo 'Topic bot-alerts created successfully.'
+        /opt/kafka/bin/kafka-topics.sh --bootstrap-server kafka:9092 --create --if-not-exists --topic spam-alerts --partitions 3
+        echo 'Topic spam-alerts created successfully.'
       "
 
-  # Додаю UI для зручності — ти зможеш зайти на http://localhost:8080 
-  # і побачити свої топіки та повідомлення очима.
   kafka-ui:
     image: provectuslabs/kafka-ui:latest
     ports:
-      - "8085:8085"
+      - "8085:8080"
     environment:
       - KAFKA_CLUSTERS_0_NAME=local
       - KAFKA_CLUSTERS_0_BOOTSTRAPSERVERS=kafka:9092
     depends_on:
-      - kafka
+      kafka:
+        condition: service_healthy
 
 volumes:
   kafka_data:

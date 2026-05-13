@@ -1,15 +1,11 @@
 [project]
 name = "wikipedia-ingestion"
 version = "0.1.0"
-description = "Сервіс для отримання потоку даних з Wikipedia EventStreams та запису в Kafka"
+description = "Wikipedia EventStreams ingestion"
 requires-python = ">=3.11"
 dependencies = [
-    # Використовуємо kafka-python-ng замість старого kafka-python, 
-    # оскільки оригінальний закинули у 2020 році і він має проблеми з Python 3.11+
     "kafka-python-ng>=2.2.2",
     "requests-sse>=0.5.0",
     "requests>=2.31.0",
-    # Залишаю pydantic-settings на випадок, якщо ти захочеш 
-    # винести KAFKA_BROKER у змінні середовища пізніше
     "pydantic-settings>=2.2.1" 
 ]
